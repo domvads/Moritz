@@ -20,6 +20,19 @@
         gap:4px;
     }
     #inventory.inventory-visible { display:grid; }
+    #townHallGui {
+        position:absolute;
+        top:50%;
+        left:50%;
+        transform:translate(-50%, -50%);
+        display:none;
+        background:rgba(0,0,0,0.8);
+        color:#fff;
+        padding:8px;
+        box-sizing:border-box;
+    }
+    #townHallGui.visible { display:block; }
+    body.gui-open #game { filter:blur(3px) brightness(0.6); }
     .inventory-cell {
         width:40px;
         height:40px;
@@ -61,11 +74,17 @@
 <canvas id="game" width="800" height="600"></canvas>
 <div id="messageContainer"></div>
 <div id="inventory"></div>
+<div id="townHallGui">
+    <h2>Gebäude</h2>
+    <button id="buildToolShop">Werkzeugshop bauen (5 Holz, 5 Stein)</button>
+    <br>
+    <button id="closeTownHallGui">Schließen</button>
+</div>
 <script>
 // Tile-Größe und Weltgröße
 let tileSize = 16;
 const baseSpeed = 6;
-const playerSpeed = 5; // Felder pro Sekunde im Player-Modus
+const playerSpeed = 3; // Felder pro Sekunde im Player-Modus
 let speed = baseSpeed / tileSize;
 
 // Tiles auf denen der Spieler laufen darf (0 = Land, 4 = Rathaus)
@@ -168,6 +187,8 @@ const inventory = new Array(inventorySize).fill(null);
 let inventoryVisible = false;
 let inventoryCursor = 0;
 const inventoryDiv = document.getElementById('inventory');
+const townHallGui = document.getElementById('townHallGui');
+let townHallGuiVisible = false;
 for (let i = 0; i < inventorySize; i++) {
     const cell = document.createElement('div');
     cell.className = 'inventory-cell';
@@ -236,10 +257,49 @@ function showMessage(type, amount) {
     setTimeout(() => div.remove(), 2000);
 }
 
+function showNotification(text) {
+    const div = document.createElement('div');
+    div.className = 'message';
+    const span = document.createElement('span');
+    span.textContent = text;
+    div.appendChild(span);
+    messageContainer.appendChild(div);
+    setTimeout(() => div.remove(), 2000);
+}
+
+function openTownHallGui() {
+    townHallGuiVisible = true;
+    townHallGui.classList.add('visible');
+    document.body.classList.add('gui-open');
+}
+
+function closeTownHallGui() {
+    townHallGuiVisible = false;
+    townHallGui.classList.remove('visible');
+    document.body.classList.remove('gui-open');
+}
+
+document.getElementById('closeTownHallGui').addEventListener('click', closeTownHallGui);
+document.getElementById('buildToolShop').addEventListener('click', () => {
+    const wood = inventory.find(i => i && i.type === 'wood');
+    const stone = inventory.find(i => i && i.type === 'stone');
+    if (wood && wood.count >= 5 && stone && stone.count >= 5) {
+        wood.count -= 5;
+        stone.count -= 5;
+        renderInventory();
+        showNotification('Werkzeugshop gebaut!');
+    }
+});
+
 // gedrückte Tasten speichern
 const keys = {};
 document.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
+    if (k === 'escape' && townHallGuiVisible) {
+        closeTownHallGui();
+        e.preventDefault();
+        return;
+    }
     if (k === 'i') {
         inventoryVisible = !inventoryVisible;
         document.body.classList.toggle('inventory-open', inventoryVisible);
@@ -297,6 +357,14 @@ canvas.addEventListener('mousedown', () => {
             cameraY = player.y - canvas.height / tileSize / 2;
         }
     } else {
+        if (x === townHallPos.x && y === townHallPos.y) {
+            const px = Math.floor(player.x);
+            const py = Math.floor(player.y);
+            if (Math.abs(px - x) <= 2 && Math.abs(py - y) <= 2 && !(px === x && py === y)) {
+                openTownHallGui();
+                return;
+            }
+        }
         const tile = getTile(x, y);
         if ((tile === 2 || tile === 3) &&
             Math.abs(x + 0.5 - player.x) <= 1 &&
@@ -380,7 +448,7 @@ function draw() {
 }
 
 function update() {
-    if (inventoryVisible) {
+    if (inventoryVisible || townHallGuiVisible) {
         draw();
         requestAnimationFrame(update);
         return;
