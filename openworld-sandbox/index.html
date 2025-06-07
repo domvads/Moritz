@@ -123,13 +123,14 @@ const ctx = canvas.getContext('2d');
 let cameraX = worldWidth / 2 - canvas.width / tileSize / 2;
 let cameraY = worldHeight / 2 - canvas.height / tileSize / 2;
 
-// Kamerasteuerung mit den Pfeiltasten
+// Kamerasteuerung mit Pfeiltasten oder WASD
 const speed = 4 / tileSize;
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowUp') cameraY -= speed;
-    if (e.key === 'ArrowDown') cameraY += speed;
-    if (e.key === 'ArrowLeft') cameraX -= speed;
-    if (e.key === 'ArrowRight') cameraX += speed;
+    const key = e.key.toLowerCase();
+    if (key === 'arrowup' || key === 'w') cameraY -= speed;
+    if (key === 'arrowdown' || key === 's') cameraY += speed;
+    if (key === 'arrowleft' || key === 'a') cameraX -= speed;
+    if (key === 'arrowright' || key === 'd') cameraX += speed;
 });
 
 function draw() {
