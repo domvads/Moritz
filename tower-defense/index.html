@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Einfaches Tower Defense</title>
+<style>
+    body { margin:0; overflow:hidden; }
+    canvas { background:#eee; display:block; margin:0 auto; }
+</style>
+</head>
+<body>
+<canvas id="game" width="800" height="600"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const path = [ {x:0, y:300}, {x:800, y:300} ];
+
+class Enemy {
+    constructor() {
+        this.x = path[0].x;
+        this.y = path[0].y;
+        this.speed = 1;
+        this.health = 100;
+    }
+    update() {
+        this.x += this.speed;
+    }
+    draw() {
+        ctx.fillStyle = 'red';
+        ctx.fillRect(this.x-10, this.y-10, 20, 20);
+    }
+    isDead() { return this.health <= 0 || this.x > canvas.width; }
+}
+
+class Tower {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.range = 100;
+        this.cooldown = 0;
+    }
+    update(enemies) {
+        if(this.cooldown > 0) this.cooldown--;
+        if(this.cooldown === 0) {
+            const target = enemies.find(e => Math.hypot(e.x-this.x, e.y-this.y) < this.range);
+            if(target) {
+                target.health -= 20;
+                this.cooldown = 50;
+            }
+        }
+    }
+    draw() {
+        ctx.fillStyle = 'blue';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 15, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+const enemies = [];
+const towers = [];
+let spawnCounter = 0;
+
+canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    towers.push(new Tower(e.clientX - rect.left, e.clientY - rect.top));
+});
+
+function gameLoop() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    if(spawnCounter++ % 200 === 0) {
+        enemies.push(new Enemy());
+    }
+
+    enemies.forEach(e => e.update());
+    towers.forEach(t => t.update(enemies));
+
+    enemies.forEach(e => e.draw());
+    towers.forEach(t => t.draw());
+
+    for(let i=enemies.length-1;i>=0;i--) {
+        if(enemies[i].isDead()) enemies.splice(i,1);
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
