@@ -68,12 +68,39 @@
     }
     .message { display:flex; align-items:center; margin:4px 0; }
     .message .icon { margin-right:4px; }
+    #buildInventory {
+        position:absolute;
+        top:50%;
+        left:50%;
+        transform:translate(-50%, -50%);
+        display:none;
+        background:rgba(0,0,0,0.8);
+        padding:4px;
+        box-sizing:border-box;
+        grid-template-columns:repeat(5, 40px);
+        grid-template-rows:repeat(10, 40px);
+        gap:4px;
+    }
+    #buildInventory.inventory-visible { display:grid; }
+    body.build-inventory-open #game { filter:blur(3px) brightness(0.6); }
+    #buildInfo {
+        position:absolute;
+        bottom:10px;
+        left:50%;
+        transform:translateX(-50%);
+        color:#fff;
+        font-family:sans-serif;
+        display:none;
+    }
+    #buildInfo.visible { display:block; }
 </style>
 </head>
 <body>
 <canvas id="game" width="800" height="600"></canvas>
 <div id="messageContainer"></div>
 <div id="inventory"></div>
+<div id="buildInventory"></div>
+<div id="buildInfo"></div>
 <div id="townHallGui">
     <h2>Gebäude</h2>
     <button id="buildToolShop">Werkzeugshop bauen (5 Holz, 5 Stein)</button>
@@ -89,7 +116,7 @@ let speed = baseSpeed / tileSize;
 
 // Tiles auf denen der Spieler laufen darf (0 = Land, 4 = Rathaus)
 function walkable(tile) {
-    return tile === 0 || tile === 4;
+    return tile === 0 || tile === 4 || tile === 5;
 }
 
 let player = null; // erscheint nach dem Platzieren des Rathauses
@@ -241,6 +268,80 @@ function addItem(type, amount) {
         }
     }
 }
+
+// Bauinventar
+const buildInventoryCols = 5;
+const buildInventoryRows = 10;
+const buildInventorySize = buildInventoryCols * buildInventoryRows;
+const buildInventory = new Array(buildInventorySize).fill(null);
+let buildInventoryVisible = false;
+let buildInventoryCursor = 0;
+let buildMode = false;
+let selectedBuilding = null;
+const buildInventoryDiv = document.getElementById('buildInventory');
+const buildInfoDiv = document.getElementById('buildInfo');
+for (let i = 0; i < buildInventorySize; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'inventory-cell';
+    buildInventoryDiv.appendChild(cell);
+}
+function renderBuildInventory() {
+    for (let i = 0; i < buildInventorySize; i++) {
+        const cell = buildInventoryDiv.children[i];
+        cell.innerHTML = '';
+        const item = buildInventory[i];
+        if (item) {
+            const icon = document.createElement('span');
+            icon.textContent = '■';
+            cell.appendChild(icon);
+            const count = document.createElement('span');
+            count.textContent = item.count;
+            count.style.position = 'absolute';
+            count.style.bottom = '2px';
+            count.style.right = '2px';
+            count.style.fontSize = '12px';
+            cell.appendChild(count);
+            const tip = document.createElement('div');
+            tip.className = 'tooltip';
+            tip.textContent = item.type === 'toolShop' ? 'Werkzeugladen' : item.type;
+            cell.appendChild(tip);
+        }
+    }
+    updateBuildInventoryCursor();
+}
+function updateBuildInventoryCursor() {
+    for (let i = 0; i < buildInventorySize; i++) {
+        buildInventoryDiv.children[i].classList.toggle('selected', i === buildInventoryCursor);
+    }
+}
+function addBuildItem(type, amount) {
+    for (let i = 0; i < buildInventorySize; i++) {
+        const item = buildInventory[i];
+        if (item && item.type === type) {
+            item.count += amount;
+            renderBuildInventory();
+            return;
+        }
+    }
+    for (let i = 0; i < buildInventorySize; i++) {
+        if (!buildInventory[i]) {
+            buildInventory[i] = { type, count: amount };
+            renderBuildInventory();
+            return;
+        }
+    }
+}
+function removeBuildItem(type, amount) {
+    for (let i = 0; i < buildInventorySize; i++) {
+        const item = buildInventory[i];
+        if (item && item.type === type) {
+            if (item.count > amount) item.count -= amount;
+            else buildInventory[i] = null;
+            renderBuildInventory();
+            return;
+        }
+    }
+}
 const messageContainer = document.getElementById('messageContainer');
 function showMessage(type, amount) {
     const div = document.createElement('div');
@@ -287,7 +388,23 @@ document.getElementById('buildToolShop').addEventListener('click', () => {
         wood.count -= 5;
         stone.count -= 5;
         renderInventory();
-        showNotification('Werkzeugshop gebaut!');
+        addBuildItem('toolShop', 1);
+        showNotification('Werkzeugladen erhalten!');
+    }
+});
+buildInventoryDiv.addEventListener('click', (e) => {
+    const cell = e.target.closest('.inventory-cell');
+    if (!cell) return;
+    const index = Array.prototype.indexOf.call(buildInventoryDiv.children, cell);
+    const item = buildInventory[index];
+    if (item) {
+        selectedBuilding = item.type;
+        buildMode = true;
+        buildInventoryVisible = false;
+        document.body.classList.remove('build-inventory-open');
+        buildInventoryDiv.classList.remove('inventory-visible');
+        buildInfoDiv.textContent = `Bau: ${item.type === 'toolShop' ? 'Werkzeugladen' : item.type}`;
+        buildInfoDiv.classList.add('visible');
     }
 });
 
@@ -300,11 +417,26 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         return;
     }
+    if (k === 'escape' && buildMode) {
+        buildMode = false;
+        selectedBuilding = null;
+        buildInfoDiv.classList.remove('visible');
+        e.preventDefault();
+        return;
+    }
     if (k === 'i') {
         inventoryVisible = !inventoryVisible;
         document.body.classList.toggle('inventory-open', inventoryVisible);
         inventoryDiv.classList.toggle('inventory-visible', inventoryVisible);
         if (inventoryVisible) renderInventory();
+        e.preventDefault();
+        return;
+    }
+    if (k === 'b') {
+        buildInventoryVisible = !buildInventoryVisible;
+        document.body.classList.toggle('build-inventory-open', buildInventoryVisible);
+        buildInventoryDiv.classList.toggle('inventory-visible', buildInventoryVisible);
+        if (buildInventoryVisible) renderBuildInventory();
         e.preventDefault();
         return;
     }
@@ -314,6 +446,15 @@ document.addEventListener('keydown', (e) => {
         else if (k === 'a') inventoryCursor = (inventoryCursor - 1 + inventorySize) % inventorySize;
         else if (k === 'd') inventoryCursor = (inventoryCursor + 1) % inventorySize;
         updateInventoryCursor();
+        e.preventDefault();
+        return;
+    }
+    if (buildInventoryVisible) {
+        if (k === 'w') buildInventoryCursor = (buildInventoryCursor - buildInventoryCols + buildInventorySize) % buildInventorySize;
+        else if (k === 's') buildInventoryCursor = (buildInventoryCursor + buildInventoryCols) % buildInventorySize;
+        else if (k === 'a') buildInventoryCursor = (buildInventoryCursor - 1 + buildInventorySize) % buildInventorySize;
+        else if (k === 'd') buildInventoryCursor = (buildInventoryCursor + 1) % buildInventorySize;
+        updateBuildInventoryCursor();
         e.preventDefault();
         return;
     }
@@ -342,6 +483,19 @@ canvas.addEventListener('mousedown', () => {
     if (!hoveredTile) return;
     const { x, y } = hoveredTile;
     const key = tileKey(x, y);
+
+    if (buildMode && selectedBuilding === 'toolShop') {
+        const dx = x - Math.floor(player.x);
+        const dy = y - Math.floor(player.y);
+        if (dx * dx + dy * dy <= 50 * 50 && getTile(x, y) === 0) {
+            world.set(key, 5);
+            removeBuildItem('toolShop', 1);
+            buildMode = false;
+            selectedBuilding = null;
+            buildInfoDiv.classList.remove('visible');
+            return;
+        }
+    }
 
     if (!townHallPlaced) {
         if (!clickedTiles.has(key) && getTile(x, y) === 0) {
@@ -424,8 +578,26 @@ function draw() {
             else if (tile === 2) ctx.fillStyle = '#888';
             else if (tile === 3) ctx.fillStyle = '#8B4513';
             else if (tile === 4) ctx.fillStyle = 'yellow';
+            else if (tile === 5) ctx.fillStyle = '#654321';
             else ctx.fillStyle = '#a3d977';
             ctx.fillRect((mapX - cameraX) * tileSize, (mapY - cameraY) * tileSize, tileSize, tileSize);
+        }
+    }
+    if (buildMode && player) {
+        const px = Math.floor(player.x);
+        const py = Math.floor(player.y);
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        const radius = 50;
+        for (let dy = -radius; dy <= radius; dy++) {
+            for (let dx = -radius; dx <= radius; dx++) {
+                if (dx * dx + dy * dy <= radius * radius) {
+                    const tx = px + dx;
+                    const ty = py + dy;
+                    const sx = (tx - cameraX) * tileSize;
+                    const sy = (ty - cameraY) * tileSize;
+                    ctx.fillRect(sx, sy, tileSize, tileSize);
+                }
+            }
         }
     }
     if (player) {
@@ -448,7 +620,7 @@ function draw() {
 }
 
 function update() {
-    if (inventoryVisible || townHallGuiVisible) {
+    if (inventoryVisible || townHallGuiVisible || buildInventoryVisible) {
         draw();
         requestAnimationFrame(update);
         return;
