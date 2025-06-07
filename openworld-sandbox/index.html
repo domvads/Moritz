@@ -13,8 +13,9 @@
 <script>
 // Tile-Größe und Weltgröße
 const tileSize = 16;
-const worldWidth = 200;
-const worldHeight = 200;
+// Startgröße der Welt (wird bei Bedarf erweitert)
+let worldWidth = 200;
+let worldHeight = 200;
 
 // Lineare Kongruenzgenerator für deterministischen Zufall
 function LCG(seed) {
@@ -27,94 +28,31 @@ function LCG(seed) {
 const seed = Date.now() & 0xffffffff; // neuer Seed bei jedem Start
 const random = LCG(seed);
 
-// Welt-Array erstellen
+// Welt-Cache
 // 0 = Boden, 1 = Wasser, 2 = Stein, 3 = Baum
-const world = [];
-for (let y = 0; y < worldHeight; y++) {
-    world[y] = [];
-    for (let x = 0; x < worldWidth; x++) {
-        // etwas mehr Land erzeugen (etwas mehr Wasser mit 40% Chance)
-        world[y][x] = random() < 0.40 ? 1 : 0;
-    }
+const world = new Map();
+
+// Pseudorandom-Zahl auf Basis der Koordinaten
+function randomAt(x, y) {
+    let s = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ seed;
+    s = (s << 13) ^ s;
+    return ((s >>> 0) / 4294967296);
 }
 
-// Smoothing, damit zusammenhängendes Land/Wasser entsteht
-function smooth(map) {
-    const copy = [];
-    for (let y = 0; y < worldHeight; y++) {
-        copy[y] = map[y].slice();
-    }
-    for (let y = 0; y < worldHeight; y++) {
-        for (let x = 0; x < worldWidth; x++) {
-            let waterCount = 0;
-            for (let dy = -1; dy <= 1; dy++) {
-                for (let dx = -1; dx <= 1; dx++) {
-                    if (dx === 0 && dy === 0) continue;
-                    const nx = x + dx;
-                    const ny = y + dy;
-                    if (nx < 0 || ny < 0 || nx >= worldWidth || ny >= worldHeight) {
-                        waterCount++;
-                    } else if (map[ny][nx] === 1) {
-                        waterCount++;
-                    }
-                }
-            }
-            copy[y][x] = waterCount > 4 ? 1 : waterCount < 4 ? 0 : copy[y][x];
-        }
-    }
-    return copy;
-}
+// Einzelnes Tile erzeugen
+function getTile(x, y) {
+    const key = `${x},${y}`;
+    if (world.has(key)) return world.get(key);
 
-for (let i = 0; i < 5; i++) {
-    world.splice(0, world.length, ...smooth(world));
-}
+    let r = randomAt(x, y);
+    let tile = r < 0.40 ? 1 : 0; // 40% Wasser
 
-// kleine Inseln entfernen
-function removeSmallRegions(map, type, minSize) {
-    const visited = Array.from({length: worldHeight}, () => Array(worldWidth).fill(false));
-    for (let y = 0; y < worldHeight; y++) {
-        for (let x = 0; x < worldWidth; x++) {
-            if (map[y][x] !== type || visited[y][x]) continue;
-            const region = [];
-            const stack = [[x, y]];
-            visited[y][x] = true;
-            while (stack.length) {
-                const [cx, cy] = stack.pop();
-                region.push([cx, cy]);
-                const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-                for (const [dx, dy] of dirs) {
-                    const nx = cx + dx;
-                    const ny = cy + dy;
-                    if (nx < 0 || ny < 0 || nx >= worldWidth || ny >= worldHeight) continue;
-                    if (!visited[ny][nx] && map[ny][nx] === type) {
-                        visited[ny][nx] = true;
-                        stack.push([nx, ny]);
-                    }
-                }
-            }
-            if (region.length <= minSize) {
-                for (const [rx, ry] of region) {
-                    map[ry][rx] = 1 - type;
-                }
-            }
-        }
+    if (tile === 0 && randomAt(x + 1, y + 1) < 1/15) {
+        tile = randomAt(x - 1, y - 1) < 0.5 ? 2 : 3;
     }
-}
 
-removeSmallRegions(world, 0, 3); // kleine Landflecken im Wasser entfernen
-removeSmallRegions(world, 1, 3); // kleine Wasserflecken auf dem Land entfernen
-
-// jedes 15. Bodenfeld in Stein oder Baum umwandeln
-let groundCounter = 0;
-for (let y = 0; y < worldHeight; y++) {
-    for (let x = 0; x < worldWidth; x++) {
-        if (world[y][x] === 0) {
-            groundCounter++;
-            if (groundCounter % 15 === 0) {
-                world[y][x] = random() < 0.5 ? 2 : 3;
-            }
-        }
-    }
+    world.set(key, tile);
+    return tile;
 }
 
 const canvas = document.getElementById('game');
@@ -123,16 +61,39 @@ const ctx = canvas.getContext('2d');
 let cameraX = worldWidth / 2 - canvas.width / tileSize / 2;
 let cameraY = worldHeight / 2 - canvas.height / tileSize / 2;
 
-// Kamerasteuerung mit den Pfeiltasten
+// Kamerasteuerung
 const speed = 4 / tileSize;
+const keys = {};
+let lookMode = false;
+
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowUp') cameraY -= speed;
-    if (e.key === 'ArrowDown') cameraY += speed;
-    if (e.key === 'ArrowLeft') cameraX -= speed;
-    if (e.key === 'ArrowRight') cameraX += speed;
+    const key = e.key.toLowerCase();
+    if (key === 's' && !e.repeat) {
+        lookMode = !lookMode;
+    }
+    keys[key] = true;
 });
 
+document.addEventListener('keyup', (e) => {
+    keys[e.key.toLowerCase()] = false;
+});
+
+function update() {
+    if (keys['arrowup']) cameraY -= speed;
+    if (keys['arrowdown']) cameraY += speed;
+    if (keys['arrowleft']) cameraX -= speed;
+    if (keys['arrowright']) cameraX += speed;
+
+    if (lookMode) {
+        if (keys['w']) cameraY -= speed;
+        if (keys['s']) cameraY += speed;
+        if (keys['a']) cameraX -= speed;
+        if (keys['d']) cameraX += speed;
+    }
+}
+
 function draw() {
+    update();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const startX = Math.floor(cameraX);
     const startY = Math.floor(cameraY);
@@ -143,8 +104,7 @@ function draw() {
         for (let x = 0; x <= tilesX; x++) {
             const mapX = startX + x;
             const mapY = startY + y;
-            if (mapX < 0 || mapY < 0 || mapX >= worldWidth || mapY >= worldHeight) continue;
-            const tile = world[mapY][mapX];
+            const tile = getTile(mapX, mapY);
             if (tile === 1) ctx.fillStyle = '#99ddee';
             else if (tile === 2) ctx.fillStyle = '#888';
             else if (tile === 3) ctx.fillStyle = '#8B4513';
