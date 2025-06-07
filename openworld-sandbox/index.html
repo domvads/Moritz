@@ -27,12 +27,14 @@ function LCG(seed) {
 const seed = Date.now() & 0xffffffff; // neuer Seed bei jedem Start
 const random = LCG(seed);
 
-// Welt-Array erstellen (0 = Boden, 1 = Wasser)
+// Welt-Array erstellen
+// 0 = Boden, 1 = Wasser, 2 = Stein, 3 = Baum
 const world = [];
 for (let y = 0; y < worldHeight; y++) {
     world[y] = [];
     for (let x = 0; x < worldWidth; x++) {
-        world[y][x] = random() < 0.45 ? 1 : 0;
+        // etwas mehr Land erzeugen
+        world[y][x] = random() < 0.35 ? 1 : 0;
     }
 }
 
@@ -67,6 +69,54 @@ for (let i = 0; i < 5; i++) {
     world.splice(0, world.length, ...smooth(world));
 }
 
+// kleine Inseln entfernen
+function removeSmallRegions(map, type, minSize) {
+    const visited = Array.from({length: worldHeight}, () => Array(worldWidth).fill(false));
+    for (let y = 0; y < worldHeight; y++) {
+        for (let x = 0; x < worldWidth; x++) {
+            if (map[y][x] !== type || visited[y][x]) continue;
+            const region = [];
+            const stack = [[x, y]];
+            visited[y][x] = true;
+            while (stack.length) {
+                const [cx, cy] = stack.pop();
+                region.push([cx, cy]);
+                const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+                for (const [dx, dy] of dirs) {
+                    const nx = cx + dx;
+                    const ny = cy + dy;
+                    if (nx < 0 || ny < 0 || nx >= worldWidth || ny >= worldHeight) continue;
+                    if (!visited[ny][nx] && map[ny][nx] === type) {
+                        visited[ny][nx] = true;
+                        stack.push([nx, ny]);
+                    }
+                }
+            }
+            if (region.length <= minSize) {
+                for (const [rx, ry] of region) {
+                    map[ry][rx] = 1 - type;
+                }
+            }
+        }
+    }
+}
+
+removeSmallRegions(world, 0, 3); // kleine Landflecken im Wasser entfernen
+removeSmallRegions(world, 1, 3); // kleine Wasserflecken auf dem Land entfernen
+
+// jedes 10. Bodenfeld in Stein oder Baum umwandeln
+let groundCounter = 0;
+for (let y = 0; y < worldHeight; y++) {
+    for (let x = 0; x < worldWidth; x++) {
+        if (world[y][x] === 0) {
+            groundCounter++;
+            if (groundCounter % 10 === 0) {
+                world[y][x] = random() < 0.5 ? 2 : 3;
+            }
+        }
+    }
+}
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
@@ -94,7 +144,11 @@ function draw() {
             const mapX = startX + x;
             const mapY = startY + y;
             if (mapX < 0 || mapY < 0 || mapX >= worldWidth || mapY >= worldHeight) continue;
-            ctx.fillStyle = world[mapY][mapX] === 1 ? '#99ddee' : '#a3d977';
+            const tile = world[mapY][mapX];
+            if (tile === 1) ctx.fillStyle = '#99ddee';
+            else if (tile === 2) ctx.fillStyle = '#888';
+            else if (tile === 3) ctx.fillStyle = '#8B4513';
+            else ctx.fillStyle = '#a3d977';
             ctx.fillRect((mapX - cameraX) * tileSize, (mapY - cameraY) * tileSize, tileSize, tileSize);
         }
     }
