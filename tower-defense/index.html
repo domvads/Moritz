@@ -14,12 +14,38 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
+// Ausgangsposition des Kreises
+let posX = canvas.width / 2;
+let posY = canvas.height / 2;
+const radius = 50;
+const speed = 10;
+
 function drawCircle() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = 'blue';
     ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, Math.PI * 2);
+    ctx.arc(posX, posY, radius, 0, Math.PI * 2);
     ctx.fill();
 }
+
+// Tastatursteuerung: W = vor, S = links, D = rechts, E = hinten
+document.addEventListener('keydown', (e) => {
+    switch (e.key.toLowerCase()) {
+        case 'w': // nach vorne (oben)
+            posY -= speed;
+            break;
+        case 's': // nach links
+            posX -= speed;
+            break;
+        case 'd': // nach rechts
+            posX += speed;
+            break;
+        case 'e': // nach hinten (unten)
+            posY += speed;
+            break;
+    }
+    drawCircle();
+});
 
 drawCircle();
 </script>
