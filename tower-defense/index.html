@@ -62,7 +62,6 @@ const cloneFriction = friction;
 const cloneDashSpeed = dashSpeed;
 const cloneDashDuration = dashDuration;
 const cloneDashCooldown = dashCooldown;
-const cloneDamage = 20;
 const cloneSpawnInterval = 600;
 let cloneSpawnTimer = cloneSpawnInterval;
 
@@ -197,6 +196,18 @@ function spawnHealth() {
     healthPacks.push({x, y});
 }
 
+function isDashingTowards(tx, ty) {
+    if (dashTime <= 0) return false;
+    const dashLen = Math.hypot(dashVelocityX, dashVelocityY);
+    const dx = tx - posX;
+    const dy = ty - posY;
+    const targetLen = Math.hypot(dx, dy);
+    if (dashLen === 0 || targetLen === 0) return false;
+    const dot = (dashVelocityX / dashLen) * (dx / targetLen) +
+                (dashVelocityY / dashLen) * (dy / targetLen);
+    return dot > 0;
+}
+
 // Mit der Taste W kann ein kurzer Dash ausgelöst werden
 document.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
@@ -252,7 +263,9 @@ function update() {
         }
         for (let i = clones.length - 1; i >= 0; i--) {
             const c = clones[i];
-            if (Math.hypot(c.x - posX, c.y - posY) <= radius + cloneRadius * 1.5) {
+            if (Math.hypot(c.x - posX, c.y - posY) <= radius + cloneRadius * 1.5 &&
+                isDashingTowards(c.x, c.y)) {
+                playerHealth = Math.min(maxHealth, playerHealth + maxHealth / 2);
                 clones.splice(i, 1);
             }
         }
@@ -313,11 +326,15 @@ function update() {
             c.y += c.dashVY;
             c.dashTime--;
             if (Math.hypot(c.x - posX, c.y - posY) <= radius + cloneRadius * 1.5) {
-                playerHealth -= cloneDamage;
-                clones.splice(i, 1);
-                if (playerHealth <= 0) {
-                    gameOver = true;
+                if (isDashingTowards(c.x, c.y)) {
+                    playerHealth = Math.min(maxHealth, playerHealth + maxHealth / 2);
+                } else {
+                    playerHealth *= 0.5;
+                    if (playerHealth <= 0) {
+                        gameOver = true;
+                    }
                 }
+                clones.splice(i, 1);
                 continue;
             }
         } else {
