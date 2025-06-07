@@ -19,8 +19,7 @@ let posX = canvas.width / 2;
 let posY = canvas.height / 2;
 const radius = 30;
 const maxSpeed = 5;
-const acceleration = 0.2;
-const friction = 0.1;
+// Der Spieler folgt automatisch dem Mauszeiger
 let velocityX = 0;
 let velocityY = 0;
 let dashVelocityX = 0;
@@ -57,12 +56,15 @@ const healthPackSize = 20;
 const healthSpawnInterval = 300; // 5 Sekunden bei ~60 fps
 let healthSpawnTimer = healthSpawnInterval;
 
-const keys = {
-    w: false,
-    a: false,
-    d: false,
-    s: false
-};
+// Position der Maus für das automatische Folgen
+let mouseX = canvas.width / 2;
+let mouseY = canvas.height / 2;
+
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
+});
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -139,45 +141,25 @@ function spawnHealth() {
     healthPacks.push({x, y});
 }
 
-// Tastatursteuerung: W = vor, A = links, D = rechts, S = hinten
-// Space löst einen kurzen Dash aus
+// Mit der Taste W kann ein kurzer Dash ausgelöst werden
 document.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     if (gameOver && key === 'enter') {
         restartGame();
         return;
     }
-    if (e.code === 'Space' && dashTime <= 0 && dashCooldownTime <= 0) {
-        let dx = 0;
-        let dy = 0;
-        if (keys.w) dy -= 1;
-        if (keys.s) dy += 1;
-        if (keys.a) dx -= 1;
-        if (keys.d) dx += 1;
-        if (dx === 0 && dy === 0) {
-            const len = Math.hypot(velocityX, velocityY);
-            if (len > 0) {
-                dx = velocityX / len;
-                dy = velocityY / len;
-            } else {
-                dy = -1;
-            }
+    if (key === 'w' && dashTime <= 0 && dashCooldownTime <= 0) {
+        let dx = mouseX - posX;
+        let dy = mouseY - posY;
+        let len = Math.hypot(dx, dy);
+        if (len === 0) {
+            dy = -1;
+            len = 1;
         }
-        const len = Math.hypot(dx, dy);
         dashVelocityX = (dx / len) * dashSpeed;
         dashVelocityY = (dy / len) * dashSpeed;
         dashTime = dashDuration;
         dashCooldownTime = dashCooldown;
-    }
-    if (key in keys) {
-        keys[key] = true;
-    }
-});
-
-document.addEventListener('keyup', (e) => {
-    const key = e.key.toLowerCase();
-    if (key in keys) {
-        keys[key] = false;
     }
 });
 
@@ -208,29 +190,15 @@ function update() {
             }
         }
     } else {
-        let ax = 0;
-        let ay = 0;
-        if (keys.w) ay -= acceleration;
-        if (keys.s) ay += acceleration;
-        if (keys.a) ax -= acceleration;
-        if (keys.d) ax += acceleration;
-
-        velocityX += ax;
-        velocityY += ay;
-
-        if (ax === 0) {
-            if (velocityX > 0) velocityX = Math.max(0, velocityX - friction);
-            else if (velocityX < 0) velocityX = Math.min(0, velocityX + friction);
-        }
-        if (ay === 0) {
-            if (velocityY > 0) velocityY = Math.max(0, velocityY - friction);
-            else if (velocityY < 0) velocityY = Math.min(0, velocityY + friction);
-        }
-
-        const curSpeed = Math.hypot(velocityX, velocityY);
-        if (curSpeed > maxSpeed) {
-            velocityX = (velocityX / curSpeed) * maxSpeed;
-            velocityY = (velocityY / curSpeed) * maxSpeed;
+        let dx = mouseX - posX;
+        let dy = mouseY - posY;
+        const dist = Math.hypot(dx, dy);
+        if (dist > maxSpeed) {
+            velocityX = (dx / dist) * maxSpeed;
+            velocityY = (dy / dist) * maxSpeed;
+        } else {
+            velocityX = dx;
+            velocityY = dy;
         }
 
         posX += velocityX;
@@ -304,7 +272,6 @@ function restartGame() {
     dashVelocityY = 0;
     dashTime = 0;
     dashCooldownTime = 0;
-    keys.w = keys.a = keys.s = keys.d = false;
     enemySpawnTimer = enemySpawnInterval;
     healthSpawnTimer = healthSpawnInterval;
     gameOver = false;
