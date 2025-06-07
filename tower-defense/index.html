@@ -9,7 +9,7 @@
 </style>
 </head>
 <body>
-<canvas id="game" width="800" height="600"></canvas>
+<canvas id="game" width="1000" height="800"></canvas>
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -17,7 +17,7 @@ const ctx = canvas.getContext('2d');
 // Ausgangsposition des Kreises
 let posX = canvas.width / 2;
 let posY = canvas.height / 2;
-const radius = 50;
+const radius = 30;
 const speed = 5;
 
 const keys = {
@@ -55,6 +55,8 @@ function update() {
     if (keys.s) posX -= speed;
     if (keys.d) posX += speed;
     if (keys.e) posY += speed;
+    posX = Math.min(Math.max(radius, posX), canvas.width - radius);
+    posY = Math.min(Math.max(radius, posY), canvas.height - radius);
     drawCircle();
     requestAnimationFrame(update);
 }
