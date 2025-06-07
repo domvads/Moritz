@@ -53,6 +53,19 @@ const enemySpeed = 2;
 const enemySpawnInterval = 120;
 let enemySpawnTimer = enemySpawnInterval;
 
+// Klone
+const clones = [];
+const cloneRadius = radius;
+const cloneMaxSpeed = maxSpeed;
+const cloneAcceleration = acceleration;
+const cloneFriction = friction;
+const cloneDashSpeed = dashSpeed;
+const cloneDashDuration = dashDuration;
+const cloneDashCooldown = dashCooldown;
+const cloneDamage = 20;
+const cloneSpawnInterval = 600;
+let cloneSpawnTimer = cloneSpawnInterval;
+
 // Heilpakete
 const healthPacks = [];
 const healthPackSize = 20;
@@ -87,6 +100,13 @@ function draw() {
     for (const e of enemies) {
         ctx.beginPath();
         ctx.arc(e.x, e.y, enemyRadius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    // Klone zeichnen
+    ctx.fillStyle = 'yellow';
+    for (const c of clones) {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, cloneRadius, 0, Math.PI * 2);
         ctx.fill();
     }
 
@@ -138,6 +158,39 @@ function spawnEnemy() {
     enemies.push({x, y, shootTimer: enemyShootInterval});
 }
 
+function spawnClone() {
+    const side = Math.floor(Math.random() * 4);
+    let x, y;
+    switch (side) {
+        case 0:
+            x = Math.random() * canvas.width;
+            y = -cloneRadius;
+            break;
+        case 1:
+            x = Math.random() * canvas.width;
+            y = canvas.height + cloneRadius;
+            break;
+        case 2:
+            x = -cloneRadius;
+            y = Math.random() * canvas.height;
+            break;
+        case 3:
+            x = canvas.width + cloneRadius;
+            y = Math.random() * canvas.height;
+            break;
+    }
+    clones.push({
+        x,
+        y,
+        vx: 0,
+        vy: 0,
+        dashVX: 0,
+        dashVY: 0,
+        dashTime: 0,
+        dashCooldown: cloneDashCooldown
+    });
+}
+
 function spawnHealth() {
     const x = Math.random() * (canvas.width - healthPackSize);
     const y = Math.random() * (canvas.height - healthPackSize);
@@ -177,6 +230,11 @@ function update() {
         enemySpawnTimer = enemySpawnInterval;
     }
 
+    if (--cloneSpawnTimer <= 0) {
+        spawnClone();
+        cloneSpawnTimer = cloneSpawnInterval;
+    }
+
     if (--healthSpawnTimer <= 0) {
         spawnHealth();
         healthSpawnTimer = healthSpawnInterval;
@@ -190,6 +248,12 @@ function update() {
             const e = enemies[i];
             if (Math.hypot(e.x - posX, e.y - posY) <= radius + enemyRadius * 1.5) {
                 enemies.splice(i, 1);
+            }
+        }
+        for (let i = clones.length - 1; i >= 0; i--) {
+            const c = clones[i];
+            if (Math.hypot(c.x - posX, c.y - posY) <= radius + cloneRadius * 1.5) {
+                clones.splice(i, 1);
             }
         }
     } else {
@@ -238,6 +302,48 @@ function update() {
         }
     }
 
+    // Klone bewegen und angreifen
+    for (let i = clones.length - 1; i >= 0; i--) {
+        const c = clones[i];
+        const dx = posX - c.x;
+        const dy = posY - c.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        if (c.dashTime > 0) {
+            c.x += c.dashVX;
+            c.y += c.dashVY;
+            c.dashTime--;
+            if (Math.hypot(c.x - posX, c.y - posY) <= radius + cloneRadius * 1.5) {
+                playerHealth -= cloneDamage;
+                clones.splice(i, 1);
+                if (playerHealth <= 0) {
+                    gameOver = true;
+                }
+                continue;
+            }
+        } else {
+            c.vx += (dx / dist) * cloneAcceleration;
+            c.vy += (dy / dist) * cloneAcceleration;
+            const speed = Math.hypot(c.vx, c.vy);
+            if (speed > cloneMaxSpeed) {
+                c.vx = (c.vx / speed) * cloneMaxSpeed;
+                c.vy = (c.vy / speed) * cloneMaxSpeed;
+            }
+            c.x += c.vx;
+            c.y += c.vy;
+            c.vx *= cloneFriction;
+            c.vy *= cloneFriction;
+            if (c.dashCooldown > 0) c.dashCooldown--;
+            if (c.dashCooldown <= 0 && dist < 200) {
+                c.dashVX = (dx / dist) * cloneDashSpeed;
+                c.dashVY = (dy / dist) * cloneDashSpeed;
+                c.dashTime = cloneDashDuration;
+                c.dashCooldown = cloneDashCooldown;
+            }
+        }
+        c.x = Math.min(Math.max(cloneRadius, c.x), canvas.width - cloneRadius);
+        c.y = Math.min(Math.max(cloneRadius, c.y), canvas.height - cloneRadius);
+    }
+
     // Projektile bewegen
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const p = projectiles[i];
@@ -266,6 +372,7 @@ function update() {
 
 function restartGame() {
     enemies.length = 0;
+    clones.length = 0;
     projectiles.length = 0;
     healthPacks.length = 0;
     playerHealth = maxHealth;
@@ -278,6 +385,7 @@ function restartGame() {
     dashTime = 0;
     dashCooldownTime = 0;
     enemySpawnTimer = enemySpawnInterval;
+    cloneSpawnTimer = cloneSpawnInterval;
     healthSpawnTimer = healthSpawnInterval;
     gameOver = false;
     draw();
