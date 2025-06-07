@@ -19,6 +19,8 @@ let posX = canvas.width / 2;
 let posY = canvas.height / 2;
 const radius = 30;
 const maxSpeed = 5;
+const acceleration = 0.5; // Beschleunigung
+const friction = 0.9;     // Trägheit
 // Der Spieler folgt automatisch dem Mauszeiger
 let velocityX = 0;
 let velocityY = 0;
@@ -38,7 +40,8 @@ let gameOver = false;
 // Projektile
 const projectiles = [];
 const projectileSpeed = 6;
-const projectileDamage = 10;
+// Gegner richten weniger Schaden an
+const projectileDamage = 5;
 
 // Gegner Schussintervall
 const enemyShootInterval = 90;
@@ -185,24 +188,26 @@ function update() {
         dashTime--;
         for (let i = enemies.length - 1; i >= 0; i--) {
             const e = enemies[i];
-            if (Math.hypot(e.x - posX, e.y - posY) <= radius + enemyRadius) {
+            if (Math.hypot(e.x - posX, e.y - posY) <= radius + enemyRadius * 1.5) {
                 enemies.splice(i, 1);
             }
         }
     } else {
         let dx = mouseX - posX;
         let dy = mouseY - posY;
-        const dist = Math.hypot(dx, dy);
-        if (dist > maxSpeed) {
-            velocityX = (dx / dist) * maxSpeed;
-            velocityY = (dy / dist) * maxSpeed;
-        } else {
-            velocityX = dx;
-            velocityY = dy;
+        const dist = Math.hypot(dx, dy) || 1;
+        velocityX += (dx / dist) * acceleration;
+        velocityY += (dy / dist) * acceleration;
+        const speed = Math.hypot(velocityX, velocityY);
+        if (speed > maxSpeed) {
+            velocityX = (velocityX / speed) * maxSpeed;
+            velocityY = (velocityY / speed) * maxSpeed;
         }
 
         posX += velocityX;
         posY += velocityY;
+        velocityX *= friction;
+        velocityY *= friction;
     }
 
     // Heilpaket einsammeln
