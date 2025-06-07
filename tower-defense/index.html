@@ -31,6 +31,13 @@ const dashCooldown = 90; // ~1.5 seconds at 60 fps
 let dashTime = 0;
 let dashCooldownTime = 0;
 
+// Gegnerverwaltung
+const enemies = [];
+const enemyRadius = 20;
+const enemySpeed = 2;
+const enemySpawnInterval = 120;
+let enemySpawnTimer = enemySpawnInterval;
+
 const keys = {
     w: false,
     a: false,
@@ -38,12 +45,44 @@ const keys = {
     s: false
 };
 
-function drawCircle() {
+function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Spieler zeichnen
     ctx.fillStyle = 'blue';
     ctx.beginPath();
     ctx.arc(posX, posY, radius, 0, Math.PI * 2);
     ctx.fill();
+    // Gegner zeichnen
+    ctx.fillStyle = 'red';
+    for (const e of enemies) {
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, enemyRadius, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function spawnEnemy() {
+    const side = Math.floor(Math.random() * 4);
+    let x, y;
+    switch (side) {
+        case 0:
+            x = Math.random() * canvas.width;
+            y = -enemyRadius;
+            break;
+        case 1:
+            x = Math.random() * canvas.width;
+            y = canvas.height + enemyRadius;
+            break;
+        case 2:
+            x = -enemyRadius;
+            y = Math.random() * canvas.height;
+            break;
+        case 3:
+            x = canvas.width + enemyRadius;
+            y = Math.random() * canvas.height;
+            break;
+    }
+    enemies.push({x, y});
 }
 
 // Tastatursteuerung: W = vor, A = links, D = rechts, S = hinten
@@ -86,6 +125,10 @@ document.addEventListener('keyup', (e) => {
 
 function update() {
     if (dashCooldownTime > 0) dashCooldownTime--;
+    if (--enemySpawnTimer <= 0) {
+        spawnEnemy();
+        enemySpawnTimer = enemySpawnInterval;
+    }
 
     if (dashTime > 0) {
         posX += dashVelocityX;
@@ -120,13 +163,23 @@ function update() {
         posX += velocityX;
         posY += velocityY;
     }
+
+    // Gegner bewegen
+    for (const e of enemies) {
+        const dx = posX - e.x;
+        const dy = posY - e.y;
+        const len = Math.hypot(dx, dy) || 1;
+        e.x += (dx / len) * enemySpeed;
+        e.y += (dy / len) * enemySpeed;
+    }
+
     posX = Math.min(Math.max(radius, posX), canvas.width - radius);
     posY = Math.min(Math.max(radius, posY), canvas.height - radius);
-    drawCircle();
+    draw();
     requestAnimationFrame(update);
 }
 
-drawCircle();
+draw();
 requestAnimationFrame(update);
 </script>
 </body>
