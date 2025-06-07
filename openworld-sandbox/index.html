@@ -83,6 +83,14 @@ const ctx = canvas.getContext('2d');
 let cameraX = 0;
 let cameraY = 0;
 
+// aktuell mit der Maus überfahrenes Feld
+let hoveredTile = null;
+// bereits gelb gefärbte Bodenfelder
+const clickedTiles = new Set();
+
+let mouseX = 0;
+let mouseY = 0;
+
 // gedrückte Tasten speichern
 const keys = {};
 document.addEventListener('keydown', (e) => {
@@ -90,6 +98,30 @@ document.addEventListener('keydown', (e) => {
 });
 document.addEventListener('keyup', (e) => {
     keys[e.key.toLowerCase()] = false;
+});
+
+// Position der Maus merken und überfahrenes Feld bestimmen
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
+    const tx = Math.floor(cameraX + mouseX / tileSize);
+    const ty = Math.floor(cameraY + mouseY / tileSize);
+    hoveredTile = { x: tx, y: ty };
+});
+
+canvas.addEventListener('mouseleave', () => {
+    hoveredTile = null;
+});
+
+// Bodenfeld beim ersten Klick gelb markieren
+canvas.addEventListener('mousedown', () => {
+    if (!hoveredTile) return;
+    const { x, y } = hoveredTile;
+    const key = tileKey(x, y);
+    if (!clickedTiles.has(key) && getTile(x, y) === 0) {
+        clickedTiles.add(key);
+    }
 });
 
 const speed = 6 / tileSize; // etwas schnelleres Bewegen
@@ -106,12 +138,24 @@ function draw() {
             const mapX = startX + x;
             const mapY = startY + y;
             const tile = getTile(mapX, mapY);
-            if (tile === 1) ctx.fillStyle = '#99ddee';
+            const key = tileKey(mapX, mapY);
+            if (clickedTiles.has(key)) {
+                ctx.fillStyle = 'yellow';
+            } else if (tile === 1) ctx.fillStyle = '#99ddee';
             else if (tile === 2) ctx.fillStyle = '#888';
             else if (tile === 3) ctx.fillStyle = '#8B4513';
             else ctx.fillStyle = '#a3d977';
             ctx.fillRect((mapX - cameraX) * tileSize, (mapY - cameraY) * tileSize, tileSize, tileSize);
         }
+    }
+    // pulsierende Umrandung für das aktuell überfahrene Feld
+    if (hoveredTile) {
+        const sx = (hoveredTile.x - cameraX) * tileSize;
+        const sy = (hoveredTile.y - cameraY) * tileSize;
+        const pulse = (Math.sin(Date.now() / 200) + 1) * 2 + 1; // 1..5
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = pulse;
+        ctx.strokeRect(sx, sy, tileSize, tileSize);
     }
     cleanup(startX + tilesX / 2, startY + tilesY / 2);
 }
