@@ -19,12 +19,15 @@ let posX = canvas.width / 2;
 let posY = canvas.height / 2;
 const radius = 30;
 const speed = 5;
+const dashSpeed = 15;
+const dashDuration = 10;
+let dashTime = 0;
 
 const keys = {
     w: false,
-    s: false,
+    a: false,
     d: false,
-    e: false
+    s: false
 };
 
 function drawCircle() {
@@ -35,9 +38,13 @@ function drawCircle() {
     ctx.fill();
 }
 
-// Tastatursteuerung: W = vor, S = links, D = rechts, E = hinten
+// Tastatursteuerung: W = vor, A = links, D = rechts, S = hinten
+// Space löst einen kurzen Dash aus
 document.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
+    if (e.code === 'Space' && dashTime <= 0) {
+        dashTime = dashDuration;
+    }
     if (key in keys) {
         keys[key] = true;
     }
@@ -51,10 +58,15 @@ document.addEventListener('keyup', (e) => {
 });
 
 function update() {
-    if (keys.w) posY -= speed;
-    if (keys.s) posX -= speed;
-    if (keys.d) posX += speed;
-    if (keys.e) posY += speed;
+    let currentSpeed = speed;
+    if (dashTime > 0) {
+        currentSpeed = dashSpeed;
+        dashTime--;
+    }
+    if (keys.w) posY -= currentSpeed;
+    if (keys.a) posX -= currentSpeed;
+    if (keys.d) posX += currentSpeed;
+    if (keys.s) posY += currentSpeed;
     posX = Math.min(Math.max(radius, posX), canvas.width - radius);
     posY = Math.min(Math.max(radius, posY), canvas.height - radius);
     drawCircle();
