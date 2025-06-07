@@ -30,6 +30,7 @@ function tileKey(x, y) {
 }
 
 // Basistyp (0 = Land, 1 = Wasser) ohne weitere Objekte
+// 2 = Stein, 3 = Baum, 4 = Rathaus
 function baseTerrain(x, y) {
     // noch geringere Frequenz für zusammenhängendere Flächen
     const r = noise(x / 70, y / 70);
@@ -87,6 +88,8 @@ let cameraY = 0;
 let hoveredTile = null;
 // bereits gelb gefärbte Bodenfelder
 const clickedTiles = new Set();
+// nur ein gelb markiertes Feld (Rathaus) zulassen
+let townHallPlaced = false;
 
 let mouseX = 0;
 let mouseY = 0;
@@ -116,11 +119,13 @@ canvas.addEventListener('mouseleave', () => {
 
 // Bodenfeld beim ersten Klick gelb markieren
 canvas.addEventListener('mousedown', () => {
-    if (!hoveredTile) return;
+    if (!hoveredTile || townHallPlaced) return;
     const { x, y } = hoveredTile;
     const key = tileKey(x, y);
     if (!clickedTiles.has(key) && getTile(x, y) === 0) {
         clickedTiles.add(key);
+        world.set(key, 4); // State zu Rathaus ändern
+        townHallPlaced = true;
     }
 });
 
@@ -144,6 +149,7 @@ function draw() {
             } else if (tile === 1) ctx.fillStyle = '#99ddee';
             else if (tile === 2) ctx.fillStyle = '#888';
             else if (tile === 3) ctx.fillStyle = '#8B4513';
+            else if (tile === 4) ctx.fillStyle = 'yellow';
             else ctx.fillStyle = '#a3d977';
             ctx.fillRect((mapX - cameraX) * tileSize, (mapY - cameraY) * tileSize, tileSize, tileSize);
         }
