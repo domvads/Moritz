@@ -6,15 +6,66 @@
 <style>
     body { margin:0; overflow:hidden; }
     canvas { background:#222; display:block; margin:0 auto; }
+    #inventory {
+        position:absolute;
+        top:50%;
+        left:50%;
+        transform:translate(-50%, -50%);
+        display:none;
+        background:rgba(0,0,0,0.8);
+        padding:4px;
+        box-sizing:border-box;
+        grid-template-columns:repeat(5, 40px);
+        grid-template-rows:repeat(10, 40px);
+        gap:4px;
+    }
+    #inventory.inventory-visible { display:grid; }
+    .inventory-cell {
+        width:40px;
+        height:40px;
+        border:1px solid #fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        position:relative;
+        font-size:20px;
+        color:#fff;
+    }
+    .inventory-cell.selected { outline:2px solid yellow; }
+    .tooltip {
+        position:absolute;
+        bottom:100%;
+        left:0;
+        background:rgba(0,0,0,0.8);
+        color:#fff;
+        padding:2px 4px;
+        font-size:12px;
+        white-space:nowrap;
+        display:none;
+    }
+    .inventory-cell:hover .tooltip { display:block; }
+    body.inventory-open #game { filter:blur(3px) brightness(0.6); }
+    #messageContainer {
+        position:absolute;
+        left:10px;
+        top:50%;
+        transform:translateY(-50%);
+        color:#fff;
+        font-family:sans-serif;
+    }
+    .message { display:flex; align-items:center; margin:4px 0; }
+    .message .icon { margin-right:4px; }
 </style>
 </head>
 <body>
 <canvas id="game" width="800" height="600"></canvas>
+<div id="messageContainer"></div>
+<div id="inventory"></div>
 <script>
 // Tile-Größe und Weltgröße
 let tileSize = 16;
 const baseSpeed = 6;
-const playerSpeed = 10; // Felder pro Sekunde im Player-Modus
+const playerSpeed = 5; // Felder pro Sekunde im Player-Modus
 let speed = baseSpeed / tileSize;
 
 // Tiles auf denen der Spieler laufen darf (0 = Land, 4 = Rathaus)
@@ -109,10 +160,104 @@ let townHallPos = null; // Position des Rathauses
 let mouseX = 0;
 let mouseY = 0;
 
+// Inventar
+const inventoryCols = 5;
+const inventoryRows = 10;
+const inventorySize = inventoryCols * inventoryRows;
+const inventory = new Array(inventorySize).fill(null);
+let inventoryVisible = false;
+let inventoryCursor = 0;
+const inventoryDiv = document.getElementById('inventory');
+for (let i = 0; i < inventorySize; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'inventory-cell';
+    inventoryDiv.appendChild(cell);
+}
+function renderInventory() {
+    for (let i = 0; i < inventorySize; i++) {
+        const cell = inventoryDiv.children[i];
+        cell.innerHTML = '';
+        const item = inventory[i];
+        if (item) {
+            const icon = document.createElement('span');
+            icon.textContent = '▲';
+            icon.style.color = item.type === 'wood' ? '#8B4513' : '#888';
+            cell.appendChild(icon);
+            const count = document.createElement('span');
+            count.textContent = item.count;
+            count.style.position = 'absolute';
+            count.style.bottom = '2px';
+            count.style.right = '2px';
+            count.style.fontSize = '12px';
+            cell.appendChild(count);
+            const tip = document.createElement('div');
+            tip.className = 'tooltip';
+            tip.textContent = item.type === 'wood' ? 'Baum' : 'Stein';
+            cell.appendChild(tip);
+        }
+    }
+    updateInventoryCursor();
+}
+function updateInventoryCursor() {
+    for (let i = 0; i < inventorySize; i++) {
+        inventoryDiv.children[i].classList.toggle('selected', i === inventoryCursor);
+    }
+}
+function addItem(type, amount) {
+    for (let i = 0; i < inventorySize; i++) {
+        const item = inventory[i];
+        if (item && item.type === type) {
+            item.count += amount;
+            renderInventory();
+            return;
+        }
+    }
+    for (let i = 0; i < inventorySize; i++) {
+        if (!inventory[i]) {
+            inventory[i] = { type, count: amount };
+            renderInventory();
+            return;
+        }
+    }
+}
+const messageContainer = document.getElementById('messageContainer');
+function showMessage(type, amount) {
+    const div = document.createElement('div');
+    div.className = 'message';
+    const icon = document.createElement('span');
+    icon.className = 'icon';
+    icon.textContent = '▲';
+    icon.style.color = type === 'wood' ? '#8B4513' : '#888';
+    const text = document.createElement('span');
+    text.textContent = `+${amount} ${type === 'wood' ? 'Baum' : 'Stein'}`;
+    div.appendChild(icon);
+    div.appendChild(text);
+    messageContainer.appendChild(div);
+    setTimeout(() => div.remove(), 2000);
+}
+
 // gedrückte Tasten speichern
 const keys = {};
 document.addEventListener('keydown', (e) => {
-    keys[e.key.toLowerCase()] = true;
+    const k = e.key.toLowerCase();
+    if (k === 'i') {
+        inventoryVisible = !inventoryVisible;
+        document.body.classList.toggle('inventory-open', inventoryVisible);
+        inventoryDiv.classList.toggle('inventory-visible', inventoryVisible);
+        if (inventoryVisible) renderInventory();
+        e.preventDefault();
+        return;
+    }
+    if (inventoryVisible) {
+        if (k === 'w') inventoryCursor = (inventoryCursor - inventoryCols + inventorySize) % inventorySize;
+        else if (k === 's') inventoryCursor = (inventoryCursor + inventoryCols) % inventorySize;
+        else if (k === 'a') inventoryCursor = (inventoryCursor - 1 + inventorySize) % inventorySize;
+        else if (k === 'd') inventoryCursor = (inventoryCursor + 1) % inventorySize;
+        updateInventoryCursor();
+        e.preventDefault();
+        return;
+    }
+    keys[k] = true;
 });
 document.addEventListener('keyup', (e) => {
     keys[e.key.toLowerCase()] = false;
@@ -157,6 +302,9 @@ canvas.addEventListener('mousedown', () => {
             Math.abs(x + 0.5 - player.x) <= 1 &&
             Math.abs(y + 0.5 - player.y) <= 1) {
             world.set(key, 0); // Resource abbauen
+            const type = tile === 3 ? 'wood' : 'stone';
+            addItem(type, 1);
+            showMessage(type, 1);
         }
     }
 });
@@ -232,6 +380,11 @@ function draw() {
 }
 
 function update() {
+    if (inventoryVisible) {
+        draw();
+        requestAnimationFrame(update);
+        return;
+    }
     if (player) {
         let newX = player.x;
         let newY = player.y;
