@@ -12,7 +12,11 @@
 <canvas id="game" width="800" height="600"></canvas>
 <script>
 // Tile-Größe und Weltgröße
-const tileSize = 16;
+let tileSize = 16;
+const baseSpeed = 6;
+let speed = baseSpeed / tileSize;
+
+let player = null; // erscheint nach dem Platzieren des Rathauses
 
 const seed = Date.now() & 0xffffffff; // neuer Seed bei jedem Start
 
@@ -124,12 +128,17 @@ canvas.addEventListener('mousedown', () => {
     const key = tileKey(x, y);
     if (!clickedTiles.has(key) && getTile(x, y) === 0) {
         clickedTiles.add(key);
-        world.set(key, 4); // State zu Rathaus ändern
+        world.set(key, 4); // State zu Rathaus 
         townHallPlaced = true;
+        // Spieler erzeugen und Kamera zentrieren
+        player = { x: x + 0.5, y: y + 0.5 };
+        tileSize = 24; // leichtes Reinzoomen
+        speed = baseSpeed / tileSize;
+        cameraX = player.x - canvas.width / tileSize / 2;
+        cameraY = player.y - canvas.height / tileSize / 2;
     }
 });
 
-const speed = 6 / tileSize; // etwas schnelleres Bewegen
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -154,6 +163,12 @@ function draw() {
             ctx.fillRect((mapX - cameraX) * tileSize, (mapY - cameraY) * tileSize, tileSize, tileSize);
         }
     }
+    if (player) {
+        ctx.fillStyle = 'yellow';
+        ctx.beginPath();
+        ctx.arc((player.x - cameraX) * tileSize, (player.y - cameraY) * tileSize, tileSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
     // pulsierende Umrandung für das aktuell überfahrene Feld
     if (hoveredTile) {
         const sx = (hoveredTile.x - cameraX) * tileSize;
@@ -167,10 +182,19 @@ function draw() {
 }
 
 function update() {
-    if (keys['arrowup'] || keys['w']) cameraY -= speed;
-    if (keys['arrowdown'] || keys['s']) cameraY += speed;
-    if (keys['arrowleft'] || keys['a']) cameraX -= speed;
-    if (keys['arrowright'] || keys['d']) cameraX += speed;
+    if (player) {
+        if (keys['w']) player.y -= speed;
+        if (keys['s']) player.y += speed;
+        if (keys['a']) player.x -= speed;
+        if (keys['d']) player.x += speed;
+        cameraX = player.x - canvas.width / tileSize / 2;
+        cameraY = player.y - canvas.height / tileSize / 2;
+    } else {
+        if (keys['arrowup'] || keys['w']) cameraY -= speed;
+        if (keys['arrowdown'] || keys['s']) cameraY += speed;
+        if (keys['arrowleft'] || keys['a']) cameraX -= speed;
+        if (keys['arrowright'] || keys['d']) cameraX += speed;
+    }
 
     draw();
     requestAnimationFrame(update);
