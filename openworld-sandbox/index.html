@@ -30,7 +30,8 @@ function tileKey(x, y) {
 }
 
 function generateTile(x, y) {
-    const r = noise(x / 20, y / 20);
+    // geringere Frequenz für größere Wasser-/Land-Flecken
+    const r = noise(x / 50, y / 50);
     if (r < 0.4) return 1; // Wasser
 
     // Boden mit gelegentlichen Steinen oder Bäumen
