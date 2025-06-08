@@ -105,11 +105,32 @@
         box-sizing:border-box;
     }
     #toolShopGui.visible { display:block; }
+    #hotbar {
+        position:absolute;
+        bottom:10px;
+        left:50%;
+        transform:translateX(-50%);
+        display:flex;
+        gap:4px;
+    }
+    .hotbar-cell {
+        width:40px;
+        height:40px;
+        border:1px solid #fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        position:relative;
+        font-size:20px;
+        color:#fff;
+    }
+    .hotbar-cell.selected { outline:2px solid yellow; }
 </style>
 </head>
 <body>
 <canvas id="game" width="800" height="600"></canvas>
 <div id="messageContainer"></div>
+<div id="hotbar"></div>
 <div id="inventory"></div>
 <div id="buildInventory"></div>
 <div id="buildInfo"></div>
@@ -134,9 +155,9 @@ const baseSpeed = 6;
 const playerSpeed = 3; // Felder pro Sekunde im Player-Modus
 let speed = baseSpeed / tileSize;
 
-// Tiles auf denen der Spieler laufen darf (0 = Land, 4 = Rathaus)
+// Tiles auf denen der Spieler laufen darf (nur 0 = Land)
 function walkable(tile) {
-    return tile === 0 || tile === 4 || tile === 5;
+    return tile === 0;
 }
 
 let player = null; // erscheint nach dem Platzieren des Rathauses
@@ -249,6 +270,7 @@ function renderInventory() {
         cell.innerHTML = '';
         const item = inventory[i];
         if (item) {
+            cell.draggable = true;
             const icon = document.createElement('span');
             if (item.type === 'wood' || item.type === 'stone') {
                 icon.textContent = '▲';
@@ -275,6 +297,8 @@ function renderInventory() {
             else if (item.type === 'stonePickaxe') tip.textContent = 'Spitzhacke';
             else if (item.type === 'stoneAxe') tip.textContent = 'Axt';
             cell.appendChild(tip);
+        } else {
+            cell.draggable = false;
         }
     }
     updateInventoryCursor();
@@ -399,6 +423,86 @@ function showNotification(text) {
     div.appendChild(span);
     messageContainer.appendChild(div);
     setTimeout(() => div.remove(), 2000);
+}
+
+// Hotbar
+const hotbarSize = 10;
+const hotbar = new Array(hotbarSize).fill(null);
+let hotbarSelected = 0;
+const hotbarDiv = document.getElementById('hotbar');
+for (let i = 0; i < hotbarSize; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'hotbar-cell';
+    hotbarDiv.appendChild(cell);
+}
+
+function renderHotbar() {
+    for (let i = 0; i < hotbarSize; i++) {
+        const cell = hotbarDiv.children[i];
+        cell.innerHTML = '';
+        const item = hotbar[i];
+        if (item) {
+            const icon = document.createElement('span');
+            if (item.type === 'wood' || item.type === 'stone') {
+                icon.textContent = '▲';
+                icon.style.color = item.type === 'wood' ? '#8B4513' : '#888';
+            } else if (item.type === 'stonePickaxe') {
+                icon.textContent = '⛏';
+                icon.style.color = '#ccc';
+            } else if (item.type === 'stoneAxe') {
+                icon.textContent = '🪓';
+                icon.style.color = '#ccc';
+            }
+            cell.appendChild(icon);
+        }
+        cell.classList.toggle('selected', i === hotbarSelected);
+    }
+}
+
+// Drag & Drop von Inventar zu Hotbar
+inventoryDiv.addEventListener('dragstart', (e) => {
+    const cell = e.target.closest('.inventory-cell');
+    if (!cell) return;
+    const index = Array.prototype.indexOf.call(inventoryDiv.children, cell);
+    if (!inventory[index]) return;
+    e.dataTransfer.setData('text/plain', index.toString());
+});
+hotbarDiv.addEventListener('dragover', (e) => e.preventDefault());
+hotbarDiv.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const src = e.dataTransfer.getData('text/plain');
+    if (src === '') return;
+    const sourceIndex = parseInt(src, 10);
+    const item = inventory[sourceIndex];
+    if (!item) return;
+    const cell = e.target.closest('.hotbar-cell');
+    if (!cell) return;
+    const targetIndex = Array.prototype.indexOf.call(hotbarDiv.children, cell);
+    hotbar[targetIndex] = { type: item.type };
+    inventory[sourceIndex] = null;
+    renderInventory();
+    renderHotbar();
+});
+
+renderHotbar();
+
+let mining = null;
+function startMining(x, y, tile) {
+    if (mining) return;
+    const tool = hotbar[hotbarSelected] ? hotbar[hotbarSelected].type : null;
+    let duration = 10;
+    if (tile === 3 && tool === 'stoneAxe') duration = 3;
+    if (tile === 2 && tool === 'stonePickaxe') duration = 3;
+    mining = { x, y, tile, end: Date.now() + duration * 1000 };
+    setTimeout(() => {
+        if (getTile(x, y) === tile) {
+            world.set(tileKey(x, y), 0);
+            const type = tile === 3 ? 'wood' : 'stone';
+            addItem(type, 1);
+            showMessage(type, 1);
+        }
+        mining = null;
+    }, duration * 1000);
 }
 
 function openTownHallGui() {
@@ -537,6 +641,20 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         return;
     }
+    if (!inventoryVisible && !buildInventoryVisible && !townHallGuiVisible && !toolShopGuiVisible) {
+        if (k >= '1' && k <= '9') {
+            hotbarSelected = parseInt(k) - 1;
+            renderHotbar();
+            e.preventDefault();
+            return;
+        }
+        if (k === '0') {
+            hotbarSelected = 9;
+            renderHotbar();
+            e.preventDefault();
+            return;
+        }
+    }
     keys[k] = true;
 });
 document.addEventListener('keyup', (e) => {
@@ -583,7 +701,15 @@ canvas.addEventListener('mousedown', () => {
             townHallPlaced = true;
             townHallPos = { x, y };
             // Spieler erzeugen und Kamera zentrieren
-            player = { x: x + 0.5, y: y + 0.5 };
+            let spawn = { x: x + 0.5, y: y + 0.5 };
+            const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+            for (const [dx, dy] of dirs) {
+                if (walkable(getTile(x + dx, y + dy))) {
+                    spawn = { x: x + dx + 0.5, y: y + dy + 0.5 };
+                    break;
+                }
+            }
+            player = spawn;
             tileSize = 24; // leichtes Reinzoomen
             speed = playerSpeed / tileSize;
             cameraX = player.x - canvas.width / tileSize / 2;
@@ -610,10 +736,7 @@ canvas.addEventListener('mousedown', () => {
         if ((tile === 2 || tile === 3) &&
             Math.abs(x + 0.5 - player.x) <= 1 &&
             Math.abs(y + 0.5 - player.y) <= 1) {
-            world.set(key, 0); // Resource abbauen
-            const type = tile === 3 ? 'wood' : 'stone';
-            addItem(type, 1);
-            showMessage(type, 1);
+            startMining(x, y, tile);
         }
     }
 });
