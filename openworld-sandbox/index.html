@@ -68,6 +68,13 @@
     }
     .message { display:flex; align-items:center; margin:4px 0; }
     .message .icon { margin-right:4px; }
+    .message .icon img,
+    .inventory-cell img,
+    .hotbar-cell img {
+        width:16px;
+        height:16px;
+        image-rendering: pixelated;
+    }
     #buildInventory {
         position:absolute;
         top:50%;
@@ -168,6 +175,103 @@
     <button id="closeToolShopGui">Schließen</button>
 </div>
 <script>
+
+function createTexture(draw) {
+    const c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 16;
+    const ctx = c.getContext('2d');
+    draw(ctx);
+    return c;
+}
+
+const textures = {
+    grass: createTexture(ctx => {
+        for (let y=0;y<16;y++) {
+            for (let x=0;x<16;x++) {
+                ctx.fillStyle = (x+y)%2 ? '#6c8f3f' : '#79a040';
+                ctx.fillRect(x, y, 1, 1);
+            }
+        }
+    }),
+    stone: createTexture(ctx => {
+        for (let y=0;y<16;y++) {
+            for (let x=0;x<16;x++) {
+                ctx.fillStyle = (x+y)%2 ? '#777' : '#999';
+                ctx.fillRect(x, y, 1, 1);
+            }
+        }
+    }),
+    tree: createTexture(ctx => {
+        for (let y=0;y<16;y++) {
+            for (let x=0;x<16;x++) {
+                ctx.fillStyle = (x+y)%2 ? '#6c8f3f' : '#79a040';
+                ctx.fillRect(x, y, 1, 1);
+            }
+        }
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(7,10,2,4);
+        ctx.fillStyle = '#2f8b2f';
+        ctx.fillRect(4,4,8,6);
+    }),
+    water: createTexture(ctx => {
+        for (let y=0;y<16;y++) {
+            for (let x=0;x<16;x++) {
+                ctx.fillStyle = (x+y)%2 ? '#4e9dd3' : '#3c8cc4';
+                ctx.fillRect(x, y, 1, 1);
+            }
+        }
+    }),
+    townhall: createTexture(ctx => {
+        ctx.fillStyle = '#6c8f3f';
+        ctx.fillRect(0,0,16,16);
+        ctx.fillStyle = '#ccc';
+        ctx.fillRect(3,6,10,8);
+        ctx.fillStyle = '#800';
+        ctx.fillRect(2,4,12,2);
+        ctx.fillStyle = '#555';
+        ctx.fillRect(7,10,2,4);
+    }),
+    toolshop: createTexture(ctx => {
+        ctx.fillStyle = '#6c8f3f';
+        ctx.fillRect(0,0,16,16);
+        ctx.fillStyle = '#bbb';
+        ctx.fillRect(3,7,10,7);
+        ctx.fillStyle = '#555';
+        ctx.fillRect(2,5,12,2);
+        ctx.fillStyle = '#222';
+        ctx.fillRect(7,10,2,4);
+    })
+};
+
+const icons = {
+    wood: createTexture(ctx => {
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(5,6,6,4);
+        ctx.fillStyle = '#654321';
+        ctx.fillRect(4,5,8,2);
+    }).toDataURL(),
+    stone: createTexture(ctx => {
+        ctx.fillStyle = '#999';
+        ctx.fillRect(4,4,8,8);
+        ctx.fillStyle = '#777';
+        ctx.fillRect(6,6,4,4);
+    }).toDataURL(),
+    stonePickaxe: createTexture(ctx => {
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(7,4,2,8);
+        ctx.fillStyle = '#ccc';
+        ctx.fillRect(5,4,6,2);
+    }).toDataURL(),
+    stoneAxe: createTexture(ctx => {
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(7,4,2,8);
+        ctx.fillStyle = '#ccc';
+        ctx.fillRect(5,4,4,2);
+        ctx.fillRect(9,5,2,3);
+    }).toDataURL()
+};
+
 // Tile-Größe und Weltgröße
 let tileSize = 16;
 const baseSpeed = 6;
@@ -290,18 +394,9 @@ function renderInventory() {
         const item = inventory[i];
         if (item) {
             cell.draggable = true;
-            const icon = document.createElement('span');
-            if (item.type === 'wood' || item.type === 'stone') {
-                icon.textContent = '▲';
-                icon.style.color = item.type === 'wood' ? '#8B4513' : '#888';
-            } else if (item.type === 'stonePickaxe') {
-                icon.textContent = '⛏';
-                icon.style.color = '#ccc';
-            } else if (item.type === 'stoneAxe') {
-                icon.textContent = '🪓';
-                icon.style.color = '#ccc';
-            }
-            cell.appendChild(icon);
+            const img = document.createElement('img');
+            img.src = icons[item.type];
+            cell.appendChild(img);
             const count = document.createElement('span');
             count.textContent = item.count;
             count.style.position = 'absolute';
@@ -367,9 +462,9 @@ function renderBuildInventory() {
         cell.innerHTML = '';
         const item = buildInventory[i];
         if (item) {
-            const icon = document.createElement('span');
-            icon.textContent = '■';
-            cell.appendChild(icon);
+            const img = document.createElement('img');
+            img.src = textures.toolshop.toDataURL();
+            cell.appendChild(img);
             const count = document.createElement('span');
             count.textContent = item.count;
             count.style.position = 'absolute';
@@ -426,8 +521,9 @@ function showMessage(type, amount) {
     div.className = 'message';
     const icon = document.createElement('span');
     icon.className = 'icon';
-    icon.textContent = '▲';
-    icon.style.color = type === 'wood' ? '#8B4513' : '#888';
+    const img = document.createElement('img');
+    img.src = icons[type];
+    icon.appendChild(img);
     const text = document.createElement('span');
     text.textContent = `+${amount} ${type === 'wood' ? 'Baum' : 'Stein'}`;
     div.appendChild(icon);
@@ -463,18 +559,9 @@ function renderHotbar() {
         cell.innerHTML = '';
         const item = hotbar[i];
         if (item) {
-            const icon = document.createElement('span');
-            if (item.type === 'wood' || item.type === 'stone') {
-                icon.textContent = '▲';
-                icon.style.color = item.type === 'wood' ? '#8B4513' : '#888';
-            } else if (item.type === 'stonePickaxe') {
-                icon.textContent = '⛏';
-                icon.style.color = '#ccc';
-            } else if (item.type === 'stoneAxe') {
-                icon.textContent = '🪓';
-                icon.style.color = '#ccc';
-            }
-            cell.appendChild(icon);
+            const img = document.createElement('img');
+            img.src = icons[item.type];
+            cell.appendChild(img);
             cell.draggable = true;
         } else {
             cell.draggable = false;
@@ -774,6 +861,8 @@ canvas.addEventListener('mousedown', () => {
                 }
             }
             player = spawn;
+            addItem('wood', 100);
+            addItem('stone', 100);
             tileSize = 24; // leichtes Reinzoomen
             speed = playerSpeed / tileSize;
             cameraX = player.x - canvas.width / tileSize / 2;
@@ -852,13 +941,16 @@ function draw() {
             const key = tileKey(mapX, mapY);
             if (clickedTiles.has(key)) {
                 ctx.fillStyle = 'yellow';
-            } else if (tile === 1) ctx.fillStyle = '#99ddee';
-            else if (tile === 2) ctx.fillStyle = '#888';
-            else if (tile === 3) ctx.fillStyle = '#8B4513';
-            else if (tile === 4) ctx.fillStyle = 'yellow';
-            else if (tile === 5) ctx.fillStyle = '#654321';
-            else ctx.fillStyle = '#a3d977';
-            ctx.fillRect((mapX - cameraX) * tileSize, (mapY - cameraY) * tileSize, tileSize, tileSize);
+                ctx.fillRect((mapX - cameraX) * tileSize, (mapY - cameraY) * tileSize, tileSize, tileSize);
+                continue;
+            }
+            let tex = textures.grass;
+            if (tile === 1) tex = textures.water;
+            else if (tile === 2) tex = textures.stone;
+            else if (tile === 3) tex = textures.tree;
+            else if (tile === 4) tex = textures.townhall;
+            else if (tile === 5) tex = textures.toolshop;
+            ctx.drawImage(tex, (mapX - cameraX) * tileSize, (mapY - cameraY) * tileSize, tileSize, tileSize);
         }
     }
     if (buildMode && player) {
