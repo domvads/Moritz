@@ -93,6 +93,18 @@
         display:none;
     }
     #buildInfo.visible { display:block; }
+    #toolShopGui {
+        position:absolute;
+        top:50%;
+        left:50%;
+        transform:translate(-50%, -50%);
+        display:none;
+        background:rgba(0,0,0,0.8);
+        color:#fff;
+        padding:8px;
+        box-sizing:border-box;
+    }
+    #toolShopGui.visible { display:block; }
 </style>
 </head>
 <body>
@@ -106,6 +118,14 @@
     <button id="buildToolShop">Werkzeugshop bauen (5 Holz, 5 Stein)</button>
     <br>
     <button id="closeTownHallGui">Schließen</button>
+</div>
+<div id="toolShopGui">
+    <h2>Werkzeugladen</h2>
+    <button id="craftPickaxe">Stein-Spitzhacke craften (3 Stein, 2 Holz)</button>
+    <br>
+    <button id="craftAxe">Stein-Axt craften (3 Holz, 2 Stein)</button>
+    <br>
+    <button id="closeToolShopGui">Schließen</button>
 </div>
 <script>
 // Tile-Größe und Weltgröße
@@ -215,7 +235,9 @@ let inventoryVisible = false;
 let inventoryCursor = 0;
 const inventoryDiv = document.getElementById('inventory');
 const townHallGui = document.getElementById('townHallGui');
+const toolShopGui = document.getElementById('toolShopGui');
 let townHallGuiVisible = false;
+let toolShopGuiVisible = false;
 for (let i = 0; i < inventorySize; i++) {
     const cell = document.createElement('div');
     cell.className = 'inventory-cell';
@@ -228,8 +250,16 @@ function renderInventory() {
         const item = inventory[i];
         if (item) {
             const icon = document.createElement('span');
-            icon.textContent = '▲';
-            icon.style.color = item.type === 'wood' ? '#8B4513' : '#888';
+            if (item.type === 'wood' || item.type === 'stone') {
+                icon.textContent = '▲';
+                icon.style.color = item.type === 'wood' ? '#8B4513' : '#888';
+            } else if (item.type === 'stonePickaxe') {
+                icon.textContent = '⛏';
+                icon.style.color = '#ccc';
+            } else if (item.type === 'stoneAxe') {
+                icon.textContent = '🪓';
+                icon.style.color = '#ccc';
+            }
             cell.appendChild(icon);
             const count = document.createElement('span');
             count.textContent = item.count;
@@ -240,7 +270,10 @@ function renderInventory() {
             cell.appendChild(count);
             const tip = document.createElement('div');
             tip.className = 'tooltip';
-            tip.textContent = item.type === 'wood' ? 'Baum' : 'Stein';
+            if (item.type === 'wood') tip.textContent = 'Baum';
+            else if (item.type === 'stone') tip.textContent = 'Stein';
+            else if (item.type === 'stonePickaxe') tip.textContent = 'Spitzhacke';
+            else if (item.type === 'stoneAxe') tip.textContent = 'Axt';
             cell.appendChild(tip);
         }
     }
@@ -380,6 +413,18 @@ function closeTownHallGui() {
     document.body.classList.remove('gui-open');
 }
 
+function openToolShopGui() {
+    toolShopGuiVisible = true;
+    toolShopGui.classList.add('visible');
+    document.body.classList.add('gui-open');
+}
+
+function closeToolShopGui() {
+    toolShopGuiVisible = false;
+    toolShopGui.classList.remove('visible');
+    document.body.classList.remove('gui-open');
+}
+
 document.getElementById('closeTownHallGui').addEventListener('click', closeTownHallGui);
 document.getElementById('buildToolShop').addEventListener('click', () => {
     const wood = inventory.find(i => i && i.type === 'wood');
@@ -390,6 +435,35 @@ document.getElementById('buildToolShop').addEventListener('click', () => {
         renderInventory();
         addBuildItem('toolShop', 1);
         showNotification('Werkzeugladen erhalten!');
+    }
+});
+document.getElementById('closeToolShopGui').addEventListener('click', closeToolShopGui);
+document.getElementById('craftPickaxe').addEventListener('click', () => {
+    const stoneIndex = inventory.findIndex(i => i && i.type === 'stone');
+    const woodIndex = inventory.findIndex(i => i && i.type === 'wood');
+    if (stoneIndex >= 0 && inventory[stoneIndex].count >= 3 &&
+        woodIndex >= 0 && inventory[woodIndex].count >= 2) {
+        inventory[stoneIndex].count -= 3;
+        if (inventory[stoneIndex].count === 0) inventory[stoneIndex] = null;
+        inventory[woodIndex].count -= 2;
+        if (inventory[woodIndex].count === 0) inventory[woodIndex] = null;
+        addItem('stonePickaxe', 1);
+        renderInventory();
+        showNotification('Stein-Spitzhacke erhalten!');
+    }
+});
+document.getElementById('craftAxe').addEventListener('click', () => {
+    const stoneIndex = inventory.findIndex(i => i && i.type === 'stone');
+    const woodIndex = inventory.findIndex(i => i && i.type === 'wood');
+    if (woodIndex >= 0 && inventory[woodIndex].count >= 3 &&
+        stoneIndex >= 0 && inventory[stoneIndex].count >= 2) {
+        inventory[woodIndex].count -= 3;
+        if (inventory[woodIndex].count === 0) inventory[woodIndex] = null;
+        inventory[stoneIndex].count -= 2;
+        if (inventory[stoneIndex].count === 0) inventory[stoneIndex] = null;
+        addItem('stoneAxe', 1);
+        renderInventory();
+        showNotification('Stein-Axt erhalten!');
     }
 });
 buildInventoryDiv.addEventListener('click', (e) => {
@@ -414,6 +488,11 @@ document.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (k === 'escape' && townHallGuiVisible) {
         closeTownHallGui();
+        e.preventDefault();
+        return;
+    }
+    if (k === 'escape' && toolShopGuiVisible) {
+        closeToolShopGui();
         e.preventDefault();
         return;
     }
@@ -520,6 +599,14 @@ canvas.addEventListener('mousedown', () => {
             }
         }
         const tile = getTile(x, y);
+        if (tile === 5) {
+            const px = Math.floor(player.x);
+            const py = Math.floor(player.y);
+            if (Math.abs(px - x) <= 1 && Math.abs(py - y) <= 1 && !(px === x && py === y)) {
+                openToolShopGui();
+                return;
+            }
+        }
         if ((tile === 2 || tile === 3) &&
             Math.abs(x + 0.5 - player.x) <= 1 &&
             Math.abs(y + 0.5 - player.y) <= 1) {
@@ -620,7 +707,7 @@ function draw() {
 }
 
 function update() {
-    if (inventoryVisible || townHallGuiVisible || buildInventoryVisible) {
+    if (inventoryVisible || townHallGuiVisible || buildInventoryVisible || toolShopGuiVisible) {
         draw();
         requestAnimationFrame(update);
         return;
