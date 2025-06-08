@@ -832,9 +832,9 @@ canvas.addEventListener('mousedown', () => {
     const { x, y } = hoveredTile;
     const key = tileKey(x, y);
 
-    if (buildMode && selectedBuilding === 'toolShop') {
-        const dx = x - Math.floor(player.x);
-        const dy = y - Math.floor(player.y);
+    if (buildMode && selectedBuilding === 'toolShop' && townHallPos) {
+        const dx = x - townHallPos.x;
+        const dy = y - townHallPos.y;
         if (dx * dx + dy * dy <= 50 * 50 && getTile(x, y) === 0) {
             world.set(key, 5);
             removeBuildItem('toolShop', 1);
@@ -953,9 +953,9 @@ function draw() {
             ctx.drawImage(tex, (mapX - cameraX) * tileSize, (mapY - cameraY) * tileSize, tileSize, tileSize);
         }
     }
-    if (buildMode && player) {
-        const px = Math.floor(player.x);
-        const py = Math.floor(player.y);
+    if (buildMode && townHallPos) {
+        const px = townHallPos.x;
+        const py = townHallPos.y;
         ctx.fillStyle = 'rgba(255,255,255,0.2)';
         const radius = 50;
         for (let dy = -radius; dy <= radius; dy++) {
