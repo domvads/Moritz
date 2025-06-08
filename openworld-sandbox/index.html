@@ -116,20 +116,39 @@
     .hotbar-cell {
         width:40px;
         height:40px;
-        border:1px solid #fff;
+        border:1px solid #000;
         display:flex;
         align-items:center;
         justify-content:center;
         position:relative;
         font-size:20px;
         color:#fff;
+        box-sizing:border-box;
     }
-    .hotbar-cell.selected { outline:2px solid yellow; }
+    .hotbar-cell.selected {
+        border:3px solid #000;
+    }
+    #miningProgress {
+        position:absolute;
+        top:10px;
+        left:10px;
+        width:80px;
+        height:8px;
+        border:1px solid #000;
+        background:rgba(255,255,255,0.3);
+        display:none;
+    }
+    #miningProgress div {
+        height:100%;
+        width:0;
+        background:yellow;
+    }
 </style>
 </head>
 <body>
 <canvas id="game" width="800" height="600"></canvas>
 <div id="messageContainer"></div>
+<div id="miningProgress"><div></div></div>
 <div id="hotbar"></div>
 <div id="inventory"></div>
 <div id="buildInventory"></div>
@@ -400,6 +419,8 @@ function removeBuildItem(type, amount) {
     }
 }
 const messageContainer = document.getElementById('messageContainer');
+const miningProgress = document.getElementById('miningProgress');
+const miningProgressFill = miningProgress.firstElementChild;
 function showMessage(type, amount) {
     const div = document.createElement('div');
     div.className = 'message';
@@ -459,29 +480,53 @@ function renderHotbar() {
     }
 }
 
-// Drag & Drop von Inventar zu Hotbar
+// Drag & Drop zwischen Inventar und Hotbar
 inventoryDiv.addEventListener('dragstart', (e) => {
     const cell = e.target.closest('.inventory-cell');
     if (!cell) return;
     const index = Array.prototype.indexOf.call(inventoryDiv.children, cell);
     if (!inventory[index]) return;
-    e.dataTransfer.setData('text/plain', index.toString());
+    e.dataTransfer.setData('text/plain', `i${index}`);
+});
+hotbarDiv.addEventListener('dragstart', (e) => {
+    const cell = e.target.closest('.hotbar-cell');
+    if (!cell) return;
+    const index = Array.prototype.indexOf.call(hotbarDiv.children, cell);
+    if (!hotbar[index]) return;
+    e.dataTransfer.setData('text/plain', `h${index}`);
 });
 hotbarDiv.addEventListener('dragover', (e) => e.preventDefault());
 hotbarDiv.addEventListener('drop', (e) => {
     e.preventDefault();
     const src = e.dataTransfer.getData('text/plain');
-    if (src === '') return;
-    const sourceIndex = parseInt(src, 10);
-    const item = inventory[sourceIndex];
-    if (!item) return;
-    const cell = e.target.closest('.hotbar-cell');
-    if (!cell) return;
-    const targetIndex = Array.prototype.indexOf.call(hotbarDiv.children, cell);
-    hotbar[targetIndex] = { type: item.type };
-    inventory[sourceIndex] = null;
-    renderInventory();
-    renderHotbar();
+    if (!src) return;
+    if (src.startsWith('i')) {
+        const sourceIndex = parseInt(src.slice(1), 10);
+        const item = inventory[sourceIndex];
+        if (!item) return;
+        const cell = e.target.closest('.hotbar-cell');
+        if (!cell) return;
+        const targetIndex = Array.prototype.indexOf.call(hotbarDiv.children, cell);
+        hotbar[targetIndex] = { type: item.type };
+        inventory[sourceIndex] = null;
+        renderInventory();
+        renderHotbar();
+    }
+});
+inventoryDiv.addEventListener('dragover', (e) => e.preventDefault());
+inventoryDiv.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const src = e.dataTransfer.getData('text/plain');
+    if (!src) return;
+    if (src.startsWith('h')) {
+        const sourceIndex = parseInt(src.slice(1), 10);
+        const item = hotbar[sourceIndex];
+        if (!item) return;
+        addItem(item.type, 1);
+        hotbar[sourceIndex] = null;
+        renderInventory();
+        renderHotbar();
+    }
 });
 
 renderHotbar();
@@ -491,18 +536,30 @@ function startMining(x, y, tile) {
     if (mining) return;
     const tool = hotbar[hotbarSelected] ? hotbar[hotbarSelected].type : null;
     let duration = 10;
+    let range = 1;
     if (tile === 3 && tool === 'stoneAxe') duration = 3;
     if (tile === 2 && tool === 'stonePickaxe') duration = 3;
-    mining = { x, y, tile, end: Date.now() + duration * 1000 };
-    setTimeout(() => {
-        if (getTile(x, y) === tile) {
-            world.set(tileKey(x, y), 0);
-            const type = tile === 3 ? 'wood' : 'stone';
-            addItem(type, 1);
-            showMessage(type, 1);
-        }
-        mining = null;
-    }, duration * 1000);
+    if (tool === 'stonePickaxe' || tool === 'stoneAxe') range = 2;
+    mining = { x, y, tile, start: Date.now(), duration: duration * 1000, range };
+    miningProgressFill.style.width = '0';
+    miningProgress.style.display = 'block';
+}
+
+function finishMining() {
+    const { x, y, tile } = mining;
+    if (getTile(x, y) === tile) {
+        world.set(tileKey(x, y), 0);
+        const type = tile === 3 ? 'wood' : 'stone';
+        addItem(type, 1);
+        showMessage(type, 1);
+    }
+    mining = null;
+    miningProgress.style.display = 'none';
+}
+
+function cancelMining() {
+    mining = null;
+    miningProgress.style.display = 'none';
 }
 
 function openTownHallGui() {
@@ -733,10 +790,14 @@ canvas.addEventListener('mousedown', () => {
                 return;
             }
         }
-        if ((tile === 2 || tile === 3) &&
-            Math.abs(x + 0.5 - player.x) <= 1 &&
-            Math.abs(y + 0.5 - player.y) <= 1) {
-            startMining(x, y, tile);
+        if (tile === 2 || tile === 3) {
+            const tool = hotbar[hotbarSelected] ? hotbar[hotbarSelected].type : null;
+            const range = (tool === 'stonePickaxe' || tool === 'stoneAxe') ? 2 : 1;
+            const px = Math.floor(player.x);
+            const py = Math.floor(player.y);
+            if (Math.abs(px - x) <= range && Math.abs(py - y) <= range) {
+                startMining(x, y, tile);
+            }
         }
     }
 });
@@ -830,6 +891,19 @@ function draw() {
 }
 
 function update() {
+    if (mining) {
+        const elapsed = Date.now() - mining.start;
+        const progress = elapsed / mining.duration;
+        const px = Math.floor(player.x);
+        const py = Math.floor(player.y);
+        if (Math.abs(px - mining.x) > mining.range || Math.abs(py - mining.y) > mining.range) {
+            cancelMining();
+        } else if (progress >= 1) {
+            finishMining();
+        } else {
+            miningProgressFill.style.width = `${Math.min(progress, 1) * 100}%`;
+        }
+    }
     if (inventoryVisible || townHallGuiVisible || buildInventoryVisible || toolShopGuiVisible) {
         draw();
         requestAnimationFrame(update);
