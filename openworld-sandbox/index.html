@@ -475,6 +475,9 @@ function renderHotbar() {
                 icon.style.color = '#ccc';
             }
             cell.appendChild(icon);
+            cell.draggable = true;
+        } else {
+            cell.draggable = false;
         }
         cell.classList.toggle('selected', i === hotbarSelected);
     }
@@ -504,11 +507,15 @@ hotbarDiv.addEventListener('drop', (e) => {
         const sourceIndex = parseInt(src.slice(1), 10);
         const item = inventory[sourceIndex];
         if (!item) return;
+        // only allow tools in the hotbar
+        if (item.type !== 'stonePickaxe' && item.type !== 'stoneAxe') return;
         const cell = e.target.closest('.hotbar-cell');
         if (!cell) return;
         const targetIndex = Array.prototype.indexOf.call(hotbarDiv.children, cell);
+        // prevent overwriting existing items
+        if (hotbar[targetIndex]) return;
         hotbar[targetIndex] = { type: item.type };
-        inventory[sourceIndex] = null;
+        if (item.count > 1) item.count -= 1; else inventory[sourceIndex] = null;
         renderInventory();
         renderHotbar();
     }
